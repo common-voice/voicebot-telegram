@@ -27,8 +27,9 @@ from threading import Thread
 from functools import wraps
 from telegram import ChatAction
 
-#base_url = "https://voice.allizom.org/api/v1/"
-base_url = "http://10.238.31.20:9000/api/v1/"
+#base_url = "https://voice.mozilla.org/api/v1/"
+base_url = "https://voice.allizom.org/api/v1/"
+#base_url = "http://10.238.31.20:9000/api/v1/"
 
 def send_action(action):
     """Sends `action` while processing func command."""
