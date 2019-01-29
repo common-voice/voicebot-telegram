@@ -57,15 +57,27 @@ send_typing_action = send_action(ChatAction.TYPING)
 # Define a few command handlers. These usually take the two arguments bot and
 # update. Error handlers also receive the raised TelegramError object in error.
 def start(bot, update):
-    """Send a message when the command /start is issued."""
     button_list = [
         InlineKeyboardButton("Record a sentence", callback_data="start_speaking"),
-        InlineKeyboardButton("Validate (not working)", callback_data="validate")
+        InlineKeyboardButton("Validate (not working yet)", callback_data="validate")
     ]
     reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=2))
     #custom_keyboard = [['Speak!', 'Validate (not working yet)']]
     #reply_markup = ReplyKeyboardMarkup(custom_keyboard)
-    update.message.reply_text('Hi there! What would you like to do?', reply_markup=reply_markup)
+    update.message.reply_text('Hi there! This is an experimental Telegram Bot '
+                              'that helps you contribute to the Mozilla\'s '
+                              'CommonVoice project. By continuing to use this '
+                              'bot you agree to our '
+                              '[Terms](https://voice.mozilla.org/en/terms) and '
+                              '[Privacy Notice](https://voice.mozilla.org/en/privacy).',
+                              parse_mode=ParseMode.MARKDOWN)
+
+    update.message.reply_text('We also know many features are missing, so if you '
+                              'happen to know how to code and you want to help us, '
+                              'feel free to clone and send pull requests to [our '
+                              'github repository](https://github.com/Common-Voice/voicebot-telegram).',
+                          parse_mode=ParseMode.MARKDOWN)
+    update.message.reply_text('What would you like to do?', reply_markup=reply_markup)
 
 def help(bot, update):
     """Send a message when the command /help is issued."""
@@ -90,7 +102,7 @@ def get_voice(bot, update, chat_data=None):
     req = urllib2.Request(base_url + 'en/clips', file_path, headers=headers_dict)
     res = urllib2.urlopen(req)
     logger.warning(res.getcode())
-    update.message.reply_text("Audio uploaded! Thank you. For a new recording press /speak")
+    update.message.reply_text("Audio uploaded! Thank you. For a new recording press /speak", parse_mode=ParseMode.MARKDOWN)
 
     #update.message.reply_text(update.message.voice.file_id)
 
@@ -133,7 +145,7 @@ def speak(bot, update, chat_data=None, user_data=None):
 
     button_list = [
         #InlineKeyboardButton("End Session", callback_data="end_session"),
-        InlineKeyboardButton("Skip", callback_data="skip")
+        InlineKeyboardButton("(skip)", callback_data="skip")
     ]
     reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=2))
     data = json.load(urllib2.urlopen(base_url + 'en/sentences/'))
