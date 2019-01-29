@@ -27,6 +27,9 @@ from threading import Thread
 from functools import wraps
 from telegram import ChatAction
 
+#base_url = "https://voice.allizom.org/api/v1/"
+base_url = "http://10.238.31.20:9000/api/v1/"
+
 def send_action(action):
     """Sends `action` while processing func command."""
 
@@ -80,8 +83,11 @@ def get_voice(bot, update, chat_data=None):
         'Content-Type': "application/octet-stream",
         'sentence': urllib2.quote(chat_data["sentence_text"].encode("utf-8")),
         'sentence_id': chat_data["sentence_id"],
+        'client_id': 'telegram_v1_' + "%i" %(update.message.from_user.id)
       }
-    req = urllib2.Request('https://voice.allizom.org/api/v1/en/clips/', file_path, headers=headers_dict)
+
+    logger.warning(headers_dict)
+    req = urllib2.Request(base_url + 'en/clips', file_path, headers=headers_dict)
     res = urllib2.urlopen(req)
     logger.warning(res.getcode())
     update.message.reply_text("Audio uploaded! Thank you. For a new recording press /speak")
@@ -130,7 +136,7 @@ def speak(bot, update, chat_data=None, user_data=None):
         InlineKeyboardButton("Skip", callback_data="skip")
     ]
     reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=2))
-    data = json.load(urllib2.urlopen("https://voice.allizom.org/api/v1/en/sentences"))
+    data = json.load(urllib2.urlopen(base_url + 'en/sentences/'))
 
     bot.send_message(chat_id,
                     "<i>Please send me a voice note with the following sentence:</i>",
@@ -150,7 +156,7 @@ def main():
     # on different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("speak", speak))
+    dp.add_handler(CommandHandler("speak", speak, pass_chat_data=True))
 
     dp.add_handler(CallbackQueryHandler(speak, pass_chat_data=True, pass_user_data=True))
 
