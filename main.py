@@ -55,7 +55,7 @@ send_typing_action = send_action(ChatAction.TYPING)
 
 # Define a few command handlers. These usually take the two arguments bot and
 # update. Error handlers also receive the raised TelegramError object in error.
-def start(bot, update):
+def start(bot, update, chat_data=None, user_data=None):
     button_list = [
         InlineKeyboardButton("Record a sentence", callback_data="start_speaking"),
         InlineKeyboardButton("Validate (not working yet)", callback_data="validate")
