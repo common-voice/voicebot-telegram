@@ -1,18 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Simple Bot to reply to Telegram messages.
-This program is dedicated to the public domain under the CC0 license.
-This Bot uses the Updater class to handle the bot.
-First, a few handler functions are defined. Then, those functions are passed to
-the Dispatcher and registered at their respective places.
-Then, the bot is started and runs until we press Ctrl-C on the command line.
-Usage:
-Basic Echobot example, repeats messages.
-Press Ctrl-C on the command line or send a signal to the process to stop the
-bot.
-"""
-
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, RegexHandler
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, ReplyKeyboardMarkup
 import logging
@@ -20,15 +8,25 @@ import urllib2
 import json
 from io import BytesIO
 
+from tinydb import TinyDB, Query
+from tinydb.operations import increment
+
+from random import randint
 import os
 import sys
+import pickle
 from threading import Thread
 
 from functools import wraps
 from telegram import ChatAction
 
+tiny_db = db = TinyDB('user_data.json')
+User = Query()
+
+voice_lang = "en"
+
 #base_url = "https://voice.mozilla.org/api/v1/"
-base_url = "https://voice.allizom.org/api/v1/"
+base_url = "https://voice.allizom.org/api/v1/" + voice_lang
 #base_url = "http://10.238.31.20:9000/api/v1/"
 
 def send_action(action):
@@ -85,9 +83,17 @@ def help(bot, update):
     update.message.reply_text('Help!')
 
 @send_typing_action
-def get_voice(bot, update, chat_data=None):
+def got_voice(bot, update, chat_data=None, user_data=None):
     """Echo the user message."""
     # TODO: check a sane lenght of a message
+    if ("sentence_id" not in chat_data.keys()):
+        update.message.reply_text("Hi, I am not sure what this vocal message is for... 😅 let's try again!")
+        bot.send_chat_action(chat_id=update.message.chat_id, action=ChatAction.TYPING)
+        (id, text) = do_send_voice(bot, update.message.chat_id)
+        chat_data["sentence_id"] = id
+        chat_data["sentence_text"] = text
+        return
+
     logger.warning(chat_data)
     update.message.reply_text("Processing your new audio...")
     file_path = update.message.voice.get_file().download_as_bytearray()
@@ -100,10 +106,42 @@ def get_voice(bot, update, chat_data=None):
       }
 
     logger.warning(headers_dict)
-    req = urllib2.Request(base_url + 'en/clips', file_path, headers=headers_dict)
+    req = urllib2.Request(base_url + '/clips', file_path, headers=headers_dict)
     res = urllib2.urlopen(req)
-    logger.warning(res.getcode())
-    update.message.reply_text("Audio uploaded! Thank you. For a new recording press /speak", parse_mode=ParseMode.MARKDOWN)
+    #logger.warning(res.getcode())
+    stored_data = tiny_db.get(User.user_id == update.message.from_user.id)
+    if (stored_data == None):
+        tiny_db.insert({'user_id': update.message.from_user.id, 'recorded_samples': 1})
+        recorded_samples = 1
+    else:
+        tiny_db.update(increment('recorded_samples'), User.user_id == update.message.from_user.id)
+        recorded_samples = stored_data['recorded_samples'] + 1
+
+    level2 = 50
+    level3 = 200
+    level4 = 600
+    level5 = 1000
+
+    thank_you_notes = {
+        1: "Thanks, I am learning a ton from you 😊",
+        2: "What a nice voice you have",
+        3: "Wonderful!",
+        4: "Thank you, you are helping me a lot!",
+    }
+
+    thank_you_note = thank_you_notes.get(randint(1,4))
+    update.message.reply_text("You sent me %i samples! %s" % (recorded_samples, thank_you_note))
+    chat_data["sentence_id"] = None
+    chat_data["sentence"] = None
+
+    bot.send_chat_action(chat_id=update.message.chat_id, action=ChatAction.TYPING)
+    (id, text) = do_send_voice(bot, update.message.chat_id)
+    chat_data["sentence_id"] = id
+    chat_data["sentence_text"] = text
+
+#    user_data['recorded_samples'] += 1
+    #speak(bot, update, chat_data, user_data)
+    # Thank you. For a new recording press /speak", parse_mode=ParseMode.MARKDOWN)
 
     #update.message.reply_text(update.message.voice.file_id)
 
@@ -132,6 +170,7 @@ def speak(bot, update, chat_data=None, user_data=None):
     #logger.warning(update.callback_query.message)
     if (update.callback_query != None):
         chat_id = update.callback_query.message.chat.id
+        update.callback_query.answer
     else:
         chat_id = update.message.chat_id
 
@@ -144,19 +183,31 @@ def speak(bot, update, chat_data=None, user_data=None):
             # start(bot, update)
             return
 
+    (id, text) = do_send_voice(bot, chat_id)
+    chat_data["sentence_id"] = id
+    chat_data["sentence_text"] = text
+
+def do_send_voice(bot, chat_id):
     button_list = [
         #InlineKeyboardButton("End Session", callback_data="end_session"),
         InlineKeyboardButton("(skip)", callback_data="skip")
     ]
     reply_markup = InlineKeyboardMarkup(build_menu(button_list, n_cols=2))
-    data = json.load(urllib2.urlopen(base_url + 'en/sentences/'))
+    data = json.load(urllib2.urlopen(base_url + '/sentences/'))
+
+    please_say_dict = {
+        1: "Could you send me a vocal message? I am learning how to say:",
+        2: "Can I hear you say this?",
+        3: "Teach me how you pronounce:",
+        4: "Would you mind sending me a voice note saying:",
+    }
 
     bot.send_message(chat_id,
-                    "<i>Please send me a voice note with the following sentence:</i>",
+                    please_say_dict.get(randint(1,4)),
                         parse_mode=ParseMode.HTML)
     bot.send_message(chat_id, "🎤 -- "+ data[0]["text"].encode('utf-8'), reply_markup=reply_markup)
-    chat_data["sentence_id"] = data[0]["id"]
-    chat_data["sentence_text"] = data[0]["text"]
+
+    return (data[0]["id"], data[0]["text"])
 
 def main():
     """Start the bot."""
@@ -166,15 +217,16 @@ def main():
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
+
     # on different commands - answer in Telegram
-    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("start", start, pass_user_data=True))
     dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("speak", speak, pass_chat_data=True))
+    dp.add_handler(CommandHandler("speak", speak, pass_chat_data=True, pass_user_data=True))
 
     dp.add_handler(CallbackQueryHandler(speak, pass_chat_data=True, pass_user_data=True))
 
     # on noncommand i.e message - echo the message on Telegram
-    dp.add_handler(MessageHandler(Filters.voice, get_voice, pass_chat_data=True))
+    dp.add_handler(MessageHandler(Filters.voice, got_voice, pass_chat_data=True, pass_user_data=True))
 
     # log all errors
     dp.add_error_handler(error)
